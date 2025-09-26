@@ -85,6 +85,8 @@ jobs:
             - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
               username: $ACR_USERNAME
               password: $ACR_PASSWORD
+          identity:
+            type: SystemAssigned
           tags: {}
           type: Microsoft.ContainerInstance/containerGroups
           EOF
@@ -146,6 +148,8 @@ jobs:
             - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
               username: $ACR_USERNAME
               password: $ACR_PASSWORD
+          identity:
+            type: SystemAssigned
           tags: {}
           type: Microsoft.ContainerInstance/containerGroups
           EOF
@@ -207,6 +211,8 @@ jobs:
             - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
               username: $ACR_USERNAME
               password: $ACR_PASSWORD
+          identity:
+            type: SystemAssigned
           tags: {}
           type: Microsoft.ContainerInstance/containerGroups
           EOF
