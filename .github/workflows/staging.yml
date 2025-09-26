@@ -110,13 +110,13 @@ jobs:
       - name: Smoke tests (trivial acceptance)
         run: |
           set -e
-          for i in {1..30}; do
+          for i in {1..5}; do
             curl -fsS "http://${{ steps.ips.outputs.PRODUCT_IP }}:8003/health" && break || sleep 5
           done
-          for i in {1..30}; do
+          for i in {1..5}; do
             curl -fsS "http://${{ steps.ips.outputs.ORDER_IP }}:8002/health" && break || sleep 5
           done
-          for i in {1..30}; do
+          for i in {1..5}; do
             curl -fsS "http://${{ steps.ips.outputs.CUSTOMER_IP }}:8001/health" && break || sleep 5
           done
 
