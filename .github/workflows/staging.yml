@@ -36,9 +36,11 @@ jobs:
           ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
           
           cat <<EOF > deploy-product.yaml
-          apiVersion: '2019-12-01'
+          apiVersion: 2019-12-01
           location: $LOCATION
           name: sit722-product-stg
+          identity:
+            type: SystemAssigned
           properties:
             containers:
             - name: product-service
@@ -46,33 +48,33 @@ jobs:
                 image: ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${IMAGE_TAG}
                 resources:
                   requests:
-                    cpu: 1
-                    memoryInGB: 1
+                    cpu: 1.0
+                    memoryInGB: 1.0
                 ports:
                 - port: 8001
                 environmentVariables:
-                - name: 'POSTGRES_HOST'
-                  value: 'postgres-db'
-                - name: 'POSTGRES_PORT'
-                  value: '5432'
-                - name: 'POSTGRES_DB'
-                  value: 'products'
-                - name: 'POSTGRES_USER'
-                  value: 'postgres'
-                - name: 'POSTGRES_PASSWORD'
-                  value: 'postgres'
+                - name: POSTGRES_HOST
+                  value: postgres-db
+                - name: POSTGRES_PORT
+                  value: 5432
+                - name: POSTGRES_DB
+                  value: products
+                - name: POSTGRES_USER
+                  value: postgres
+                - name: POSTGRES_PASSWORD
+                  value: postgres
             - name: postgres-db
               properties:
                 image: postgres:16-alpine
                 resources:
                   requests:
-                    cpu: 1
-                    memoryInGB: 1
+                    cpu: 1.0
+                    memoryInGB: 1.0
                 environmentVariables:
-                - name: 'POSTGRES_PASSWORD'
-                  value: 'postgres'
-                - name: 'POSTGRES_DB'
-                  value: 'products'
+                - name: POSTGRES_PASSWORD
+                  value: postgres
+                - name: POSTGRES_DB
+                  value: products
             osType: Linux
             restartPolicy: Always
             ipAddress:
@@ -85,8 +87,6 @@ jobs:
             - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
               username: $ACR_USERNAME
               password: $ACR_PASSWORD
-          identity:
-            type: SystemAssigned
           tags: {}
           type: Microsoft.ContainerInstance/containerGroups
           EOF
@@ -99,9 +99,11 @@ jobs:
           ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
           
           cat <<EOF > deploy-order.yaml
-          apiVersion: '2019-12-01'
+          apiVersion: 2019-12-01
           location: $LOCATION
           name: sit722-order-stg
+          identity:
+            type: SystemAssigned
           properties:
             containers:
             - name: order-service
@@ -109,33 +111,33 @@ jobs:
                 image: ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${IMAGE_TAG}
                 resources:
                   requests:
-                    cpu: 1
-                    memoryInGB: 1
+                    cpu: 1.0
+                    memoryInGB: 1.0
                 ports:
                 - port: 8002
                 environmentVariables:
-                - name: 'POSTGRES_HOST'
-                  value: 'postgres-db'
-                - name: 'POSTGRES_PORT'
-                  value: '5432'
-                - name: 'POSTGRES_DB'
-                  value: 'orders'
-                - name: 'POSTGRES_USER'
-                  value: 'postgres'
-                - name: 'POSTGRES_PASSWORD'
-                  value: 'postgres'
+                - name: POSTGRES_HOST
+                  value: postgres-db
+                - name: POSTGRES_PORT
+                  value: 5432
+                - name: POSTGRES_DB
+                  value: orders
+                - name: POSTGRES_USER
+                  value: postgres
+                - name: POSTGRES_PASSWORD
+                  value: postgres
             - name: postgres-db
               properties:
                 image: postgres:16-alpine
                 resources:
                   requests:
-                    cpu: 1
-                    memoryInGB: 1
+                    cpu: 1.0
+                    memoryInGB: 1.0
                 environmentVariables:
-                - name: 'POSTGRES_PASSWORD'
-                  value: 'postgres'
-                - name: 'POSTGRES_DB'
-                  value: 'orders'
+                - name: POSTGRES_PASSWORD
+                  value: postgres
+                - name: POSTGRES_DB
+                  value: orders
             osType: Linux
             restartPolicy: Always
             ipAddress:
@@ -148,8 +150,6 @@ jobs:
             - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
               username: $ACR_USERNAME
               password: $ACR_PASSWORD
-          identity:
-            type: SystemAssigned
           tags: {}
           type: Microsoft.ContainerInstance/containerGroups
           EOF
@@ -162,9 +162,11 @@ jobs:
           ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
           
           cat <<EOF > deploy-customer.yaml
-          apiVersion: '2019-12-01'
+          apiVersion: 2019-12-01
           location: $LOCATION
           name: sit722-customer-stg
+          identity:
+            type: SystemAssigned
           properties:
             containers:
             - name: customer-service
@@ -172,33 +174,33 @@ jobs:
                 image: ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${IMAGE_TAG}
                 resources:
                   requests:
-                    cpu: 1
-                    memoryInGB: 1
+                    cpu: 1.0
+                    memoryInGB: 1.0
                 ports:
                 - port: 8003
                 environmentVariables:
-                - name: 'POSTGRES_HOST'
-                  value: 'postgres-db'
-                - name: 'POSTGRES_PORT'
-                  value: '5432'
-                - name: 'POSTGRES_DB'
-                  value: 'customers'
-                - name: 'POSTGRES_USER'
-                  value: 'postgres'
-                - name: 'POSTGRES_PASSWORD'
-                  value: 'postgres'
+                - name: POSTGRES_HOST
+                  value: postgres-db
+                - name: POSTGRES_PORT
+                  value: 5432
+                - name: POSTGRES_DB
+                  value: customers
+                - name: POSTGRES_USER
+                  value: postgres
+                - name: POSTGRES_PASSWORD
+                  value: postgres
             - name: postgres-db
               properties:
                 image: postgres:16-alpine
                 resources:
                   requests:
-                    cpu: 1
-                    memoryInGB: 1
+                    cpu: 1.0
+                    memoryInGB: 1.0
                 environmentVariables:
-                - name: 'POSTGRES_PASSWORD'
-                  value: 'postgres'
-                - name: 'POSTGRES_DB'
-                  value: 'customers'
+                - name: POSTGRES_PASSWORD
+                  value: postgres
+                - name: POSTGRES_DB
+                  value: customers
             osType: Linux
             restartPolicy: Always
             ipAddress:
@@ -211,8 +213,6 @@ jobs:
             - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
               username: $ACR_USERNAME
               password: $ACR_PASSWORD
-          identity:
-            type: SystemAssigned
           tags: {}
           type: Microsoft.ContainerInstance/containerGroups
           EOF
