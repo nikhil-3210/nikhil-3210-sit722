@@ -49,9 +49,9 @@ jobs:
 
           # Add Postgres sidecar
           az container exec -g "$STAGING_RG" -n sit722-product-stg --container-name product_service --exec-command "/bin/true" || true
-          # ACI multi-container via separate create isn't supported; instead, create a second ACI group for DB:
           az container create -g "$STAGING_RG" -n sit722-product-db-stg \
             --image postgres:16-alpine --cpu 1 --memory 1 \
+            --os-type Linux \
             --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=products \
             --restart-policy Always
 
@@ -73,6 +73,7 @@ jobs:
             --assign-identity
           az container create -g "$STAGING_RG" -n sit722-order-db-stg \
             --image postgres:16-alpine --cpu 1 --memory 1 \
+            --os-type Linux \
             --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=orders \
             --restart-policy Always
 
@@ -94,6 +95,7 @@ jobs:
             --assign-identity
           az container create -g "$STAGING_RG" -n sit722-customer-db-stg \
             --image postgres:16-alpine --cpu 1 --memory 1 \
+            --os-type Linux \
             --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=customers \
             --restart-policy Always
 
