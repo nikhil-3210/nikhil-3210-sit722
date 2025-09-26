@@ -7,7 +7,7 @@ on:
 jobs:
   deploy-staging:
     if: >
-      ${{
+      ${{ 
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push'
       }}
@@ -23,7 +23,6 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Build & push again for production provenance (optional, but clearer)
       - name: Get ACR login server
         id: acr
         run: echo "LOGIN_SERVER=$(az acr show -n $ACR_NAME --query loginServer -o tsv)" >> $GITHUB_OUTPUT
@@ -31,71 +30,188 @@ jobs:
       - name: Ensure RG exists
         run: az group create -n "$STAGING_RG" -l "$LOCATION"
 
-      - name: Create product_service staging
+      - name: Create product_service staging (with DB sidecar)
         run: |
-          az container create -g "$STAGING_RG" -n sit722-product-stg \
-            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${IMAGE_TAG} \
-            --cpu 1 --memory 1 \
-            --ports 8001 \
-            --ip-address Public \
-            --restart-policy Never \
-            --os-type Linux \
-            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
-            --dns-name-label sit722-product-${{ github.run_id }} \
-            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
-            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
-            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+          ACR_USERNAME=$(az acr credential show -n $ACR_NAME --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+          
+          cat <<EOF > deploy-product.yaml
+          apiVersion: '2019-12-01'
+          location: $LOCATION
+          name: sit722-product-stg
+          properties:
+            containers:
+            - name: product-service
+              properties:
+                image: ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${IMAGE_TAG}
+                resources:
+                  requests:
+                    cpu: 1
+                    memoryInGB: 1
+                ports:
+                - port: 8001
+                environmentVariables:
+                - name: 'POSTGRES_HOST'
+                  value: 'postgres-db'
+                - name: 'POSTGRES_PORT'
+                  value: '5432'
+                - name: 'POSTGRES_DB'
+                  value: 'products'
+                - name: 'POSTGRES_USER'
+                  value: 'postgres'
+                - name: 'POSTGRES_PASSWORD'
+                  value: 'postgres'
+            - name: postgres-db
+              properties:
+                image: postgres:16-alpine
+                resources:
+                  requests:
+                    cpu: 1
+                    memoryInGB: 1
+                environmentVariables:
+                - name: 'POSTGRES_PASSWORD'
+                  value: 'postgres'
+                - name: 'POSTGRES_DB'
+                  value: 'products'
+            osType: Linux
+            restartPolicy: Always
+            ipAddress:
+              type: Public
+              ports:
+              - protocol: TCP
+                port: 8001
+              dnsNameLabel: sit722-product-${{ github.run_id }}
+            imageRegistryCredentials:
+            - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
+              username: $ACR_USERNAME
+              password: $ACR_PASSWORD
+          tags: {}
+          type: Microsoft.ContainerInstance/containerGroups
+          EOF
+          
+          az container create -g "$STAGING_RG" --file deploy-product.yaml
 
-          az container create -g "$STAGING_RG" -n sit722-product-db-stg \
-            --image postgres:16-alpine \
-            --cpu 1 --memory 1 \
-            --restart-policy Always \
-            --os-type Linux \
-            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=products
-
-      - name: Create order_service staging
+      - name: Create order_service staging (with DB sidecar)
         run: |
-          az container create -g "$STAGING_RG" -n sit722-order-stg \
-            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${IMAGE_TAG} \
-            --cpu 1 --memory 1 \
-            --ports 8002 \
-            --ip-address Public \
-            --restart-policy Never \
-            --os-type Linux \
-            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
-            --dns-name-label sit722-order-${{ github.run_id }} \
-            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
-            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
-            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+          ACR_USERNAME=$(az acr credential show -n $ACR_NAME --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+          
+          cat <<EOF > deploy-order.yaml
+          apiVersion: '2019-12-01'
+          location: $LOCATION
+          name: sit722-order-stg
+          properties:
+            containers:
+            - name: order-service
+              properties:
+                image: ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${IMAGE_TAG}
+                resources:
+                  requests:
+                    cpu: 1
+                    memoryInGB: 1
+                ports:
+                - port: 8002
+                environmentVariables:
+                - name: 'POSTGRES_HOST'
+                  value: 'postgres-db'
+                - name: 'POSTGRES_PORT'
+                  value: '5432'
+                - name: 'POSTGRES_DB'
+                  value: 'orders'
+                - name: 'POSTGRES_USER'
+                  value: 'postgres'
+                - name: 'POSTGRES_PASSWORD'
+                  value: 'postgres'
+            - name: postgres-db
+              properties:
+                image: postgres:16-alpine
+                resources:
+                  requests:
+                    cpu: 1
+                    memoryInGB: 1
+                environmentVariables:
+                - name: 'POSTGRES_PASSWORD'
+                  value: 'postgres'
+                - name: 'POSTGRES_DB'
+                  value: 'orders'
+            osType: Linux
+            restartPolicy: Always
+            ipAddress:
+              type: Public
+              ports:
+              - protocol: TCP
+                port: 8002
+              dnsNameLabel: sit722-order-${{ github.run_id }}
+            imageRegistryCredentials:
+            - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
+              username: $ACR_USERNAME
+              password: $ACR_PASSWORD
+          tags: {}
+          type: Microsoft.ContainerInstance/containerGroups
+          EOF
+          
+          az container create -g "$STAGING_RG" --file deploy-order.yaml
 
-          az container create -g "$STAGING_RG" -n sit722-order-db-stg \
-            --image postgres:16-alpine \
-            --cpu 1 --memory 1 \
-            --restart-policy Always \
-            --os-type Linux \
-            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=orders
-
-      - name: Create customer_service staging
+      - name: Create customer_service staging (with DB sidecar)
         run: |
-          az container create -g "$STAGING_RG" -n sit722-customer-stg \
-            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${IMAGE_TAG} \
-            --cpu 1 --memory 1 \
-            --ports 8003 \
-            --ip-address Public \
-            --restart-policy Never \
-            --os-type Linux \
-            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
-            --dns-name-label sit722-customer-${{ github.run_id }} \
-            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
-            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
-            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
-
-          az container create -g "$STAGING_RG" -n sit722-customer-db-stg \
-            --image postgres:16-alpine \
-            --cpu 1 --memory 1 \
-            --restart-policy Always \
-            --os-type Linux \
-            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=customers
+          ACR_USERNAME=$(az acr credential show -n $ACR_NAME --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+          
+          cat <<EOF > deploy-customer.yaml
+          apiVersion: '2019-12-01'
+          location: $LOCATION
+          name: sit722-customer-stg
+          properties:
+            containers:
+            - name: customer-service
+              properties:
+                image: ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${IMAGE_TAG}
+                resources:
+                  requests:
+                    cpu: 1
+                    memoryInGB: 1
+                ports:
+                - port: 8003
+                environmentVariables:
+                - name: 'POSTGRES_HOST'
+                  value: 'postgres-db'
+                - name: 'POSTGRES_PORT'
+                  value: '5432'
+                - name: 'POSTGRES_DB'
+                  value: 'customers'
+                - name: 'POSTGRES_USER'
+                  value: 'postgres'
+                - name: 'POSTGRES_PASSWORD'
+                  value: 'postgres'
+            - name: postgres-db
+              properties:
+                image: postgres:16-alpine
+                resources:
+                  requests:
+                    cpu: 1
+                    memoryInGB: 1
+                environmentVariables:
+                - name: 'POSTGRES_PASSWORD'
+                  value: 'postgres'
+                - name: 'POSTGRES_DB'
+                  value: 'customers'
+            osType: Linux
+            restartPolicy: Always
+            ipAddress:
+              type: Public
+              ports:
+              - protocol: TCP
+                port: 8003
+              dnsNameLabel: sit722-customer-${{ github.run_id }}
+            imageRegistryCredentials:
+            - server: ${{ steps.acr.outputs.LOGIN_SERVER }}
+              username: $ACR_USERNAME
+              password: $ACR_PASSWORD
+          tags: {}
+          type: Microsoft.ContainerInstance/containerGroups
+          EOF
+          
+          az container create -g "$STAGING_RG" --file deploy-customer.yaml
 
       - name: Fetch staging IPs
         id: ips
@@ -127,6 +243,3 @@ jobs:
           az container delete -g "$STAGING_RG" -n sit722-product-stg -y || true
           az container delete -g "$STAGING_RG" -n sit722-order-stg -y || true
           az container delete -g "$STAGING_RG" -n sit722-customer-stg -y || true
-          az container delete -g "$STAGING_RG" -n sit722-product-db-stg -y || true
-          az container delete -g "$STAGING_RG" -n sit722-order-db-stg -y || true
-          az container delete -g "$STAGING_RG" -n sit722-customer-db-stg -y || true
