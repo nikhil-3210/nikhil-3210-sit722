@@ -38,6 +38,7 @@ jobs:
             --ports 8001 \
             --ip-address Public \
             --restart-policy Never \
+            --os-type Linux \
             --environment-variables \
               POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --dns-name-label sit722-product-${{ github.run_id }} \
@@ -62,6 +63,7 @@ jobs:
             --ports 8002 \
             --ip-address Public \
             --restart-policy Never \
+            --os-type Linux \
             --environment-variables \
               POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --dns-name-label sit722-order-${{ github.run_id }} \
@@ -82,6 +84,7 @@ jobs:
             --ports 8003 \
             --ip-address Public \
             --restart-policy Never \
+            --os-type Linux \
             --environment-variables \
               POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --dns-name-label sit722-customer-${{ github.run_id }} \
