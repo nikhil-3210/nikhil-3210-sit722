@@ -1,0 +1,93 @@
+name: Production Deploy
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    env:
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      PROD_RG: ${{ secrets.PROD_RG }}
+      LOCATION: ${{ secrets.AZURE_REGION }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get ACR login server
+        id: acr
+        run: echo "LOGIN_SERVER=$(az acr show -n $ACR_NAME --query loginServer -o tsv)" >> $GITHUB_OUTPUT
+
+      # Build & push again for production provenance (optional, but clearer)
+      - name: ACR login
+        run: az acr login --name $ACR_NAME
+
+      - name: Build & push all images
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/product_service/Dockerfile
+          push: true
+          tags: ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${{ env.IMAGE_TAG }}
+
+      - name: Build & push order_service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/order_service/Dockerfile
+          push: true
+          tags: ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${{ env.IMAGE_TAG }}
+
+      - name: Build & push customer_service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/customer_service/Dockerfile
+          push: true
+          tags: ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${{ env.IMAGE_TAG }}
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: true
+          tags: ${{ steps.acr.outputs.LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }}
+
+      # Deploy/Update prod ACI
+      - name: Deploy product_service (prod)
+        run: |
+          az container delete -g "$PROD_RG" -n sit722-product -y || true
+          az container create -g "$PROD_RG" -n sit722-product \
+            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${IMAGE_TAG} \
+            --cpu 1 --memory 1 --ports 8001 --ip-address Public --restart-policy Always \
+            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
+            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+
+      - name: Deploy order_service (prod)
+        run: |
+          az container delete -g "$PROD_RG" -n sit722-order -y || true
+          az container create -g "$PROD_RG" -n sit722-order \
+            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${IMAGE_TAG} \
+            --cpu 1 --memory 1 --ports 8002 --ip-address Public --restart-policy Always \
+            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
+            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+
+      - name: Deploy customer_service (prod)
+        run: |
+          az container delete -g "$PROD_RG" -n sit722-customer -y || true
+          az container create -g "$PROD_RG" -n sit722-customer \
+            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${IMAGE_TAG} \
+            --cpu 1 --memory 1 --ports 8003 --ip-address Public --restart-policy Always \
+            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
+            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
