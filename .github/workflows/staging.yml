@@ -38,21 +38,19 @@ jobs:
             --ports 8001 \
             --ip-address Public \
             --restart-policy Never \
-            --environment-variables \
-              POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --os-type Linux \
+            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --dns-name-label sit722-product-${{ github.run_id }} \
             --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
             --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
-            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv) \
-            --assign-identity
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
 
-          # Add Postgres sidecar
-          az container exec -g "$STAGING_RG" -n sit722-product-stg --container-name product_service --exec-command "/bin/true" || true
-          # ACI multi-container via separate create isn't supported; instead, create a second ACI group for DB:
           az container create -g "$STAGING_RG" -n sit722-product-db-stg \
-            --image postgres:16-alpine --cpu 1 --memory 1 \
-            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=products \
-            --restart-policy Always
+            --image postgres:16-alpine \
+            --cpu 1 --memory 1 \
+            --restart-policy Always \
+            --os-type Linux \
+            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=products
 
       - name: Create order_service staging
         run: |
@@ -62,17 +60,19 @@ jobs:
             --ports 8002 \
             --ip-address Public \
             --restart-policy Never \
-            --environment-variables \
-              POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --os-type Linux \
+            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --dns-name-label sit722-order-${{ github.run_id }} \
             --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
             --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
-            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv) \
-            --assign-identity
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+
           az container create -g "$STAGING_RG" -n sit722-order-db-stg \
-            --image postgres:16-alpine --cpu 1 --memory 1 \
-            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=orders \
-            --restart-policy Always
+            --image postgres:16-alpine \
+            --cpu 1 --memory 1 \
+            --restart-policy Always \
+            --os-type Linux \
+            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=orders
 
       - name: Create customer_service staging
         run: |
@@ -82,17 +82,19 @@ jobs:
             --ports 8003 \
             --ip-address Public \
             --restart-policy Never \
-            --environment-variables \
-              POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --os-type Linux \
+            --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --dns-name-label sit722-customer-${{ github.run_id }} \
             --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
             --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
-            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv) \
-            --assign-identity
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv)
+
           az container create -g "$STAGING_RG" -n sit722-customer-db-stg \
-            --image postgres:16-alpine --cpu 1 --memory 1 \
-            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=customers \
-            --restart-policy Always
+            --image postgres:16-alpine \
+            --cpu 1 --memory 1 \
+            --restart-policy Always \
+            --os-type Linux \
+            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=customers
 
       - name: Fetch staging IPs
         id: ips

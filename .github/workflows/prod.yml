@@ -65,6 +65,7 @@ jobs:
           az container create -g "$PROD_RG" -n sit722-product \
             --image ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${IMAGE_TAG} \
             --cpu 1 --memory 1 --ports 8001 --ip-address Public --restart-policy Always \
+            --os-type Linux \
             --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
             --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
@@ -76,6 +77,7 @@ jobs:
           az container create -g "$PROD_RG" -n sit722-order \
             --image ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${IMAGE_TAG} \
             --cpu 1 --memory 1 --ports 8002 --ip-address Public --restart-policy Always \
+            --os-type Linux \
             --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
             --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
@@ -87,6 +89,7 @@ jobs:
           az container create -g "$PROD_RG" -n sit722-customer \
             --image ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${IMAGE_TAG} \
             --cpu 1 --memory 1 --ports 8003 --ip-address Public --restart-policy Always \
+            --os-type Linux \
             --environment-variables POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
             --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
             --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
