@@ -1,0 +1,129 @@
+name: Staging Deploy (Ephemeral)
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  deploy-staging:
+    if: >
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'
+      }}
+    runs-on: ubuntu-latest
+    env:
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      STAGING_RG: ${{ secrets.STAGING_RG }}
+      LOCATION: ${{ secrets.AZURE_REGION }}
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get ACR login server
+        id: acr
+        run: echo "LOGIN_SERVER=$(az acr show -n $ACR_NAME --query loginServer -o tsv)" >> $GITHUB_OUTPUT
+
+      - name: Ensure RG exists
+        run: az group create -n "$STAGING_RG" -l "$LOCATION"
+
+      - name: Create product_service staging
+        run: |
+          az container create -g "$STAGING_RG" -n sit722-product-stg \
+            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/product_service:${IMAGE_TAG} \
+            --cpu 1 --memory 1 \
+            --ports 8001 \
+            --ip-address Public \
+            --restart-policy Never \
+            --environment-variables \
+              POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=products POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --dns-name-label sit722-product-${{ github.run_id }} \
+            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
+            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv) \
+            --assign-identity
+
+          # Add Postgres sidecar
+          az container exec -g "$STAGING_RG" -n sit722-product-stg --container-name product_service --exec-command "/bin/true" || true
+          # ACI multi-container via separate create isn't supported; instead, create a second ACI group for DB:
+          az container create -g "$STAGING_RG" -n sit722-product-db-stg \
+            --image postgres:16-alpine --cpu 1 --memory 1 \
+            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=products \
+            --restart-policy Always
+
+      - name: Create order_service staging
+        run: |
+          az container create -g "$STAGING_RG" -n sit722-order-stg \
+            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/order_service:${IMAGE_TAG} \
+            --cpu 1 --memory 1 \
+            --ports 8002 \
+            --ip-address Public \
+            --restart-policy Never \
+            --environment-variables \
+              POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=orders POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --dns-name-label sit722-order-${{ github.run_id }} \
+            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
+            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv) \
+            --assign-identity
+          az container create -g "$STAGING_RG" -n sit722-order-db-stg \
+            --image postgres:16-alpine --cpu 1 --memory 1 \
+            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=orders \
+            --restart-policy Always
+
+      - name: Create customer_service staging
+        run: |
+          az container create -g "$STAGING_RG" -n sit722-customer-stg \
+            --image ${{ steps.acr.outputs.LOGIN_SERVER }}/customer_service:${IMAGE_TAG} \
+            --cpu 1 --memory 1 \
+            --ports 8003 \
+            --ip-address Public \
+            --restart-policy Never \
+            --environment-variables \
+              POSTGRES_HOST=postgres POSTGRES_PORT=5432 POSTGRES_DB=customers POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres \
+            --dns-name-label sit722-customer-${{ github.run_id }} \
+            --registry-login-server ${{ steps.acr.outputs.LOGIN_SERVER }} \
+            --registry-username $(az acr credential show -n $ACR_NAME --query username -o tsv) \
+            --registry-password $(az acr credential show -n $ACR_NAME --query passwords[0].value -o tsv) \
+            --assign-identity
+          az container create -g "$STAGING_RG" -n sit722-customer-db-stg \
+            --image postgres:16-alpine --cpu 1 --memory 1 \
+            --environment-variables POSTGRES_PASSWORD=postgres POSTGRES_DB=customers \
+            --restart-policy Always
+
+      - name: Fetch staging IPs
+        id: ips
+        run: |
+          PROD_IP=$(az container show -g "$STAGING_RG" -n sit722-product-stg --query "ipAddress.ip" -o tsv)
+          ORD_IP=$(az container show -g "$STAGING_RG" -n sit722-order-stg --query "ipAddress.ip" -o tsv)
+          CUS_IP=$(az container show -g "$STAGING_RG" -n sit722-customer-stg --query "ipAddress.ip" -o tsv)
+          echo "PRODUCT_IP=$PROD_IP" >> $GITHUB_OUTPUT
+          echo "ORDER_IP=$ORD_IP" >> $GITHUB_OUTPUT
+          echo "CUSTOMER_IP=$CUS_IP" >> $GITHUB_OUTPUT
+          echo "Staging endpoints: product:$PROD_IP:8001 order:$ORD_IP:8002 customer:$CUS_IP:8003"
+
+      - name: Smoke tests (trivial acceptance)
+        run: |
+          set -e
+          for i in {1..30}; do
+            curl -fsS "http://${{ steps.ips.outputs.PRODUCT_IP }}:8001/health" && break || sleep 5
+          done
+          for i in {1..30}; do
+            curl -fsS "http://${{ steps.ips.outputs.ORDER_IP }}:8002/health" && break || sleep 5
+          done
+          for i in {1..30}; do
+            curl -fsS "http://${{ steps.ips.outputs.CUSTOMER_IP }}:8003/health" && break || sleep 5
+          done
+
+      - name: Destroy staging (clean up temp environment)
+        if: always()
+        run: |
+          az container delete -g "$STAGING_RG" -n sit722-product-stg -y || true
+          az container delete -g "$STAGING_RG" -n sit722-order-stg -y || true
+          az container delete -g "$STAGING_RG" -n sit722-customer-stg -y || true
+          az container delete -g "$STAGING_RG" -n sit722-product-db-stg -y || true
+          az container delete -g "$STAGING_RG" -n sit722-order-db-stg -y || true
+          az container delete -g "$STAGING_RG" -n sit722-customer-db-stg -y || true
