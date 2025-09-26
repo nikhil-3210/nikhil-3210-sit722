@@ -23,6 +23,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Build & push again for production provenance (optional, but clearer)
       - name: Get ACR login server
         id: acr
         run: echo "LOGIN_SERVER=$(az acr show -n $ACR_NAME --query loginServer -o tsv)" >> $GITHUB_OUTPUT
